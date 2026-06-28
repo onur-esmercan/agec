@@ -1,0 +1,51 @@
+[project]
+name = "agec"
+version = "0.1.0"
+description = "Authorized Governance Execution Context for AI agents"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [
+  { name = "Onur Esmercan", email = "onuresmercan@gmail.com" }
+]
+keywords = ["ai-agents", "authorization", "governance", "audit", "security"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Software Development :: Libraries",
+  "Topic :: Security",
+]
+dependencies = []
+
+[project.optional-dependencies]
+openai = ["openai-agents>=0.1"]
+langchain = ["langchain-core>=0.2"]
+dev = ["pytest>=8.0", "pytest-cov"]
+
+[project.urls]
+Homepage = "https://github.com/onur-esmercan/agec"
+Repository = "https://github.com/onur-esmercan/agec"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"
+
+[tool.coverage.run]
+source = ["agec"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 80
