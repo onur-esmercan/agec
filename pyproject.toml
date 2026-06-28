@@ -21,6 +21,9 @@ classifiers = [
 ]
 dependencies = []
 
+[project.scripts]
+agec-demo = "agec.demo:main"
+
 [project.optional-dependencies]
 openai = ["openai-agents>=0.1"]
 langchain = ["langchain-core>=0.2"]
