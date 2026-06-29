@@ -172,8 +172,25 @@ If AGEC returns anything other than `allow`, the adapter raises
 
 ## Examples
 
+- `examples/cto_demo.py`
+- `examples/01_basic_validation.py`
+- `examples/02_block_bad_context.py`
+- `examples/03_openai_tool_guard.py`
+- `examples/04_langgraph_node_guard.py`
+- `examples/05_audit_log.py`
 - `examples/crm_email_agent.py`
 - `examples/coding_agent.py`
+
+Run demos locally:
+
+```bash
+PYTHONPATH=src python examples/cto_demo.py
+PYTHONPATH=src python examples/01_basic_validation.py
+PYTHONPATH=src python examples/02_block_bad_context.py
+PYTHONPATH=src python examples/03_openai_tool_guard.py
+PYTHONPATH=src python examples/04_langgraph_node_guard.py
+PYTHONPATH=src python examples/05_audit_log.py
+```
 
 ## Roadmap
 
