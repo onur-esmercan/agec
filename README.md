@@ -178,6 +178,8 @@ If AGEC returns anything other than `allow`, the adapter raises
 - `examples/03_openai_tool_guard.py`
 - `examples/04_langgraph_node_guard.py`
 - `examples/05_audit_log.py`
+- `examples/06_persisted_audit_log.py`
+- `examples/07_local_automation_guard.py`
 
 Run demos locally:
 
@@ -188,6 +190,8 @@ PYTHONPATH=src python examples/02_block_bad_context.py
 PYTHONPATH=src python examples/03_openai_tool_guard.py
 PYTHONPATH=src python examples/04_langgraph_node_guard.py
 PYTHONPATH=src python examples/05_audit_log.py
+PYTHONPATH=src python examples/06_persisted_audit_log.py
+PYTHONPATH=src python examples/07_local_automation_guard.py
 ```
 
 ## Roadmap

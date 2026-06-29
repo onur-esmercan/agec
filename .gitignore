@@ -44,3 +44,4 @@ Thumbs.db
 # Project-specific scratch files
 AGEC_organized_notes.md
 .push-tmp-*
+*.jsonl
