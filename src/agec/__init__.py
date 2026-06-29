@@ -1,44 +1,25 @@
-"""AGEC — Authorized Governance Execution Context.
+"""AGEC SDK.
 
-A pre-execution governance layer for AI agents. Every agent action is
-validated for intent, semantic context, execution path, and data
-processing permissions before the tool call is allowed to run.
-
-Quick start::
-
-    from agec import guard
-
-    @guard(
-        intent="send_email",
-        purpose="customer_support",
-        allowed_tools=["gmail.send"],
-    )
-    def send_email() -> str:
-        return "Email sent."
+AGEC is a pre-execution governance layer for AI agents. It validates
+``Intent + Context + ExecutionPath`` immediately before tool execution.
 """
 
 from .audit import AuditEvent, AuditLog
-from .core import AGEC, AGECStatus, AGECTransitionError, DataPermissions, ExecutionPath, Intent
-from .guard import AGECBlockedError, guard
-from .policies import DEFAULT_LEGAL_BASES, Policy
-from .validator import AGECValidator, ValidationResult, validate
+from .client import AGEC
+from .decisions import GovernanceDecision
+from .models import Context, ExecutionPath, Intent
+from .validator import AGECValidator, validate
 
 __version__ = "0.1.0"
 
 __all__ = [
     "AGEC",
-    "AGECStatus",
-    "AGECTransitionError",
-    "AGECBlockedError",
     "AGECValidator",
     "AuditEvent",
     "AuditLog",
-    "DEFAULT_LEGAL_BASES",
-    "DataPermissions",
+    "Context",
     "ExecutionPath",
+    "GovernanceDecision",
     "Intent",
-    "Policy",
-    "ValidationResult",
-    "guard",
     "validate",
 ]

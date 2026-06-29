@@ -1,145 +1,115 @@
-"""AGEC validation engine.
-
-Runs a deterministic, ordered series of policy checks against an
-:class:`~agec.core.AGEC` context and records every decision in an
-:class:`~agec.audit.AuditLog`.
-"""
+"""Deterministic MVP validator for the AGEC SDK."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import uuid
 
 from .audit import AuditLog
-from .core import AGEC
-from .policies import Policy
+from .context import validate_context
+from .decisions import GovernanceDecision
+from .models import Context, ExecutionPath, Intent
+from .path import ApprovedPathRegistry
 
-
-@dataclass
-class ValidationResult:
-    """Outcome of a single validation run.
-
-    Attributes:
-        allowed: ``True`` if all policy checks passed.
-        reason: Human-readable explanation of the outcome.
-    """
-
-    allowed: bool
-    reason: str
+_PRECEDENCE = {
+    "allow": 0,
+    "review": 1,
+    "reauthorize": 2,
+    "suspend": 3,
+    "halt": 4,
+}
 
 
 class AGECValidator:
-    """Validates an :class:`~agec.core.AGEC` context against a :class:`~agec.policies.Policy`.
+    """Validates intent, context, and execution path before execution."""
 
-    Checks are evaluated in this order:
-
-    1. Expiry (TTL)
-    2. Intent allowlist
-    3. Intent confidence threshold
-    4. Execution path non-empty
-    5. Tool allowlist (per step)
-    6. Purpose allowlist
-    7. Legal basis allowlist
-    8. Blocked data categories
-
-    Every outcome — allow or deny — is recorded in the
-    :class:`~agec.audit.AuditLog`.
-
-    Args:
-        policy: The :class:`~agec.policies.Policy` to validate against.
-        audit_log: Optional existing :class:`~agec.audit.AuditLog` to
-            append events to. A new log is created if omitted.
-    """
-
-    def __init__(self, policy: Policy, audit_log: AuditLog | None = None) -> None:
-        self.policy = policy
+    def __init__(
+        self,
+        *,
+        path_registry: ApprovedPathRegistry | None = None,
+        audit_log: AuditLog | None = None,
+        minimum_intent_confidence: float = 0.70,
+    ) -> None:
+        self.path_registry = path_registry or ApprovedPathRegistry()
         self.audit_log = audit_log or AuditLog()
+        self.minimum_intent_confidence = minimum_intent_confidence
 
-    def validate(self, agec: AGEC) -> ValidationResult:
-        """Run all policy checks against *agec*.
+    def validate(
+        self,
+        intent: Intent,
+        context: Context,
+        execution_path: ExecutionPath,
+    ) -> GovernanceDecision:
+        """Run the AGEC v0.1 decision table."""
+        agec_id = f"agec_{uuid.uuid4().hex[:12]}"
 
-        Args:
-            agec: The governance context to validate.
+        intent_status, intent_score, intent_reason = self._validate_intent(intent)
+        context_status, context_score, context_reason = validate_context(context)
+        path_status, path_score, path_reason = self.path_registry.evaluate(execution_path)
 
-        Returns:
-            A :class:`ValidationResult` indicating allow or deny.
-        """
-        if agec.is_expired():
-            agec.cancel()
-            return self._deny(agec, "AGEC expired.")
-
-        if not self.policy.is_intent_allowed(agec.intent.type):
-            agec.suspend()
-            return self._deny(agec, f"Intent not allowed: {agec.intent.type}")
-
-        if agec.intent.confidence < self.policy.minimum_intent_confidence:
-            agec.suspend()
-            return self._deny(agec, "Intent confidence below threshold.")
-
-        if not agec.execution_path.steps:
-            agec.suspend()
-            return self._deny(agec, "Execution path is empty.")
-
-        for tool in agec.execution_path.steps:
-            if not self.policy.is_tool_allowed(tool):
-                agec.suspend()
-                return self._deny(agec, f"Tool not allowed: {tool}")
-
-        if not self.policy.is_purpose_allowed(agec.data_permissions.purpose):
-            agec.suspend()
-            return self._deny(
-                agec,
-                f"Purpose not allowed: {agec.data_permissions.purpose}",
-            )
-
-        if not self.policy.is_legal_basis_allowed(agec.data_permissions.legal_basis):
-            agec.suspend()
-            return self._deny(
-                agec,
-                f"Legal basis not allowed: {agec.data_permissions.legal_basis}",
-            )
-
-        if self.policy.has_blocked_data_category(agec.data_permissions.data_categories):
-            agec.suspend()
-            return self._deny(agec, "Blocked data category detected.")
-
-        agec.activate()
-        self.audit_log.record(
-            agec.agec_id,
-            "validation.allowed",
-            "AGEC validation passed.",
-            {
-                "intent": agec.intent.type,
-                "path_hash": agec.execution_path.deterministic_hash(),
-            },
+        status = max(
+            [intent_status, context_status, path_status],
+            key=lambda item: _PRECEDENCE[item],
         )
-        return ValidationResult(True, "AGEC validation passed.")
+        reason = self._reason_for(status, intent_reason, context_reason, path_reason)
 
-    def _deny(self, agec: AGEC, reason: str) -> ValidationResult:
-        """Record a denial event and return a denied :class:`ValidationResult`."""
-        self.audit_log.record(
-            agec.agec_id,
-            "validation.denied",
+        audit_id = self.audit_log.record(
+            agec_id,
+            f"validation.{status}",
             reason,
             {
-                "intent": agec.intent.type,
-                "status": agec.status.value,
+                "intent": intent.type,
+                "intent_source": intent.source,
+                "approved_path_id": execution_path.approved_path_id,
+                "path_hash": execution_path.deterministic_hash(),
+                "scores": {
+                    "intent": intent_score,
+                    "context": context_score,
+                    "path": path_score,
+                },
             },
         )
-        return ValidationResult(False, reason)
+
+        return GovernanceDecision(
+            agec_id=agec_id,
+            status=status,  # type: ignore[arg-type]
+            intent_score=round(intent_score, 2),
+            context_score=round(context_score, 2),
+            path_score=round(path_score, 2),
+            reason=reason,
+            audit_id=audit_id,
+        )
+
+    def _validate_intent(self, intent: Intent) -> tuple[str, float, str]:
+        if not intent.type or not intent.source:
+            return "halt", 0.0, "Intent is invalid."
+        if intent.confidence < 0.0 or intent.confidence > 1.0:
+            return "halt", 0.0, "Intent confidence must be between 0.0 and 1.0."
+        if intent.confidence < self.minimum_intent_confidence:
+            return "review", intent.confidence, "Intent is ambiguous."
+        return "allow", intent.confidence, "Intent validated."
+
+    def _reason_for(
+        self,
+        status: str,
+        intent_reason: str,
+        context_reason: str,
+        path_reason: str,
+    ) -> str:
+        if status == "allow":
+            return "Intent, context and execution path validated."
+        if status == "review":
+            return context_reason if context_reason != "Context validated." else intent_reason
+        if status in {"reauthorize", "halt"} and path_reason != "Execution path validated.":
+            return path_reason
+        if status == "suspend":
+            return context_reason
+        return intent_reason
 
 
-def validate(agec: AGEC, policy: Policy) -> ValidationResult:
-    """Convenience function: validate *agec* against *policy*.
-
-    Creates a throw-away :class:`AGECValidator` with a fresh
-    :class:`~agec.audit.AuditLog`. Prefer constructing a validator
-    directly when you need to inspect audit events afterward.
-
-    Args:
-        agec: The governance context to validate.
-        policy: The policy to validate against.
-
-    Returns:
-        A :class:`ValidationResult`.
-    """
-    return AGECValidator(policy).validate(agec)
+def validate(
+    intent: Intent,
+    context: Context,
+    execution_path: ExecutionPath,
+) -> GovernanceDecision:
+    """Convenience function for one-off validation."""
+    return AGECValidator().validate(intent, context, execution_path)

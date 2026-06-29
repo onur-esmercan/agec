@@ -1,13 +1,17 @@
 # AGEC
 
-Pre-execution governance layer for AI agents.
+AGEC SDK is a pre-execution governance layer for AI agents.
 
-Every AI agent action should be authorized before execution. AGEC validates
-intent, semantic context, execution path, and data processing permissions
-before any tool call is executed. It provides deterministic authorization,
-replayable decisions, and auditability for autonomous AI agents.
+It is not an agent framework. It validates `Intent + Context + Execution Path`
+immediately before an agent executes tools.
 
----
+```text
+Agent Reasoning
+    |
+AGEC SDK
+    |
+Tool Execution
+```
 
 ## Installation
 
@@ -18,161 +22,123 @@ pip install agec
 ## Quick Start
 
 ```python
-from agec import guard, AGECBlockedError
+from agec import AGEC, Intent, Context, ExecutionPath
 
-@guard(
-    intent="send_email",
-    purpose="customer_support",
-    allowed_tools=["gmail.send"],
-    legal_basis="consent",
-)
-def send_email() -> str:
-    return "Email sent."
+agec = AGEC()
 
-
-@guard(
-    intent="transfer_money",
-    purpose="unknown",
-    allowed_tools=["bank.transfer"],
-    intent_confidence=0.48,         # below the 0.7 threshold
-)
-def unsafe_transfer() -> str:
-    return "Transferred $1M."
-
-
-print(send_email())                 # → Email sent.
-
-try:
-    unsafe_transfer()
-except AGECBlockedError as exc:
-    print("AGEC BLOCKED EXECUTION")
-    print(f"Reason:   {exc.reason}")
-    print(f"Audit ID: {exc.agec.agec_id}")
-```
-
-If validation fails, execution is blocked **before** the wrapped function runs.
-
----
-
-## Why AGEC?
-
-Traditional authorization systems answer:
-
-```text
-Can this identity access this resource?
-```
-
-AGEC answers a different question:
-
-```text
-Should this exact action execute right now?
-```
-
-AGEC introduces a mandatory governance layer between agent planning and tool
-execution — combining intent validation, policy enforcement, and tamper-evident
-audit logging in a single decorator.
-
----
-
-## What AGEC Validates
-
-| Check | What it enforces |
-|---|---|
-| **Intent** | Declared intent must be in the policy allowlist |
-| **Confidence** | Intent confidence must meet the minimum threshold |
-| **Execution path** | Every tool step must be explicitly permitted |
-| **Purpose** | Data processing purpose must be allowed |
-| **Legal basis** | GDPR-aligned legal basis must be declared and allowed |
-| **Data categories** | Blocked data categories are rejected before execution |
-| **Expiry (TTL)** | Stale contexts are cancelled automatically |
-
----
-
-## Architecture
-
-```text
-User
-  │
-AI Agent (planning)
-  │
-AGEC  ◄─── Policy + Validator
-  │              │
-  │         AuditLog ──► audit.jsonl (optional)
-  │
-Tool Execution
-```
-
----
-
-## Lower-Level API
-
-```python
-from agec import AGEC, Intent, ExecutionPath, DataPermissions, Policy, AGECValidator
-
-policy = Policy(
-    allowed_intents=["send_email"],
-    allowed_tools=["gmail.send"],
-    allowed_purposes=["customer_support"],
-    allowed_legal_bases=["consent", "contract"],
-)
-
-agec = AGEC(
-    intent=Intent(type="send_email", confidence=0.95),
-    context={"user_id": "123"},
-    execution_path=ExecutionPath(path_id="email_path", steps=["gmail.send"]),
-    data_permissions=DataPermissions(
-        purpose="customer_support",
-        legal_basis="consent",
-        allowed_operations=["send"],
-        data_categories=["email"],
+decision = agec.validate(
+    intent=Intent(
+        type="send_price_list",
+        source="user_request",
+        confidence=0.91,
+    ),
+    context=Context(
+        facts={
+            "price_list_status": "current",
+            "campaign_status": "active",
+            "customer_segment": "premium",
+        }
+    ),
+    execution_path=ExecutionPath(
+        steps=[
+            "crm.read_customers",
+            "pricing.get_latest_list",
+            "crm.filter_segment",
+            "email.send_campaign",
+        ],
+        approved_path_id="price_campaign_v1",
     ),
 )
 
-validator = AGECValidator(policy)
-result = validator.validate(agec)
-
-print(result.allowed)   # True
-print(result.reason)    # AGEC validation passed.
-print(agec.status)      # AGECStatus.ACTIVE
+print(decision.status)
+# allow / review / suspend / halt / reauthorize
 ```
 
-### Persisting the Audit Log
+The decision is a structured object:
+
+```json
+{
+  "agec_id": "agec_123",
+  "status": "allow",
+  "intent_score": 0.91,
+  "context_score": 0.88,
+  "path_score": 1.0,
+  "reason": "Intent, context and execution path validated.",
+  "audit_id": "audit_456"
+}
+```
+
+## Core API
 
 ```python
-from agec import AuditLog
-
-log = AuditLog()
-# ... pass log to AGECValidator(policy, audit_log=log) ...
-
-# Save all recorded events to disk
-log.save_json("audit.jsonl")
-
-# Reload later for replay or compliance review
-restored = AuditLog.load_json("audit.jsonl")
+agec.validate(intent, context, execution_path)
 ```
 
----
+### Models
+
+```python
+Intent(type: str, source: str, confidence: float)
+Context(facts: dict, context_hash: str | None = None)
+ExecutionPath(steps: list[str], approved_path_id: str | None = None)
+GovernanceDecision(status, reason, intent_score, context_score, path_score)
+```
+
+## MVP Decision Logic
+
+| Condition | Decision |
+|---|---|
+| Intent invalid | `halt` |
+| Intent ambiguous | `review` |
+| Context missing | `review` |
+| Context invalid | `suspend` |
+| Path unknown | `reauthorize` |
+| Path modified | `halt` |
+| All valid | `allow` |
+
+## Audit Log
+
+Every validation writes an in-memory audit event. You can persist it as JSONL:
+
+```python
+from agec import AGEC, AuditLog
+
+audit_log = AuditLog()
+agec = AGEC(audit_log=audit_log)
+
+# ... run validations ...
+
+audit_log.save_json("audit.jsonl")
+```
+
+## Simple Agent Wrapper
+
+`AGEC.wrap_callable(...)` can guard a LangGraph node, an OpenAI Agents tool
+function, or any regular Python callable:
+
+```python
+guarded_tool = agec.wrap_callable(
+    tool_function,
+    intent=intent,
+    context=context,
+    execution_path=execution_path,
+)
+
+result = guarded_tool()
+```
+
+The callable runs only when the decision status is `allow`.
+
+## Examples
+
+- `examples/crm_email_agent.py`
+- `examples/coding_agent.py`
 
 ## Roadmap
 
-- [ ] OpenAI Agents SDK adapter
-- [ ] LangGraph adapter
-- [ ] CrewAI adapter
-- [ ] AutoGen adapter
-- [ ] CLI demo runner
-- [ ] Policy manifest (YAML/JSON) support
-- [x] Replayable audit log (JSON persistence)
-- [x] Deterministic execution path hashing
-
----
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md).
-
-## Changelog
-
-See [CHANGELOG.md](CHANGELOG.md).
+- [x] Python SDK
+- [x] Audit log
+- [x] Simple LangGraph/OpenAI Agents-compatible callable wrapper
+- [ ] MCP server
 
 ## License
 

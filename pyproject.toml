@@ -1,14 +1,14 @@
 [project]
 name = "agec"
 version = "0.1.0"
-description = "Authorized Governance Execution Context for AI agents"
+description = "Pre-execution governance SDK for AI agents"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
 authors = [
   { name = "Onur Esmercan", email = "onuresmercan@gmail.com" }
 ]
-keywords = ["ai-agents", "authorization", "governance", "audit", "security"]
+keywords = ["ai-agents", "governance", "audit", "security", "pre-execution"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",
@@ -21,12 +21,7 @@ classifiers = [
 ]
 dependencies = []
 
-[project.scripts]
-agec-demo = "agec.demo:main"
-
 [project.optional-dependencies]
-openai = ["openai-agents>=0.1"]
-langchain = ["langchain-core>=0.2"]
 dev = ["pytest>=8.0", "pytest-cov"]
 
 [project.urls]

@@ -6,6 +6,7 @@ __pycache__/
 *.pyd
 
 # Virtual environments
+.env.local
 .venv/
 venv/
 env/
@@ -42,3 +43,4 @@ Thumbs.db
 
 # Project-specific scratch files
 AGEC_organized_notes.md
+.push-tmp-*
