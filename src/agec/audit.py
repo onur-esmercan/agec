@@ -8,6 +8,7 @@ JSON files for replay and compliance auditing.
 from __future__ import annotations
 
 import json
+import uuid
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -26,6 +27,7 @@ class AuditEvent:
         timestamp: ISO-8601 UTC timestamp of when the event was recorded.
     """
 
+    audit_id: str
     agec_id: str
     event_type: str
     message: str
@@ -57,7 +59,7 @@ class AuditLog:
         event_type: str,
         message: str,
         metadata: dict[str, Any] | None = None,
-    ) -> None:
+    ) -> str:
         """Append a new event to the log.
 
         Args:
@@ -66,8 +68,10 @@ class AuditLog:
             message: Human-readable outcome description.
             metadata: Optional structured data to attach.
         """
+        audit_id = f"audit_{uuid.uuid4().hex[:12]}"
         self.events.append(
             AuditEvent(
+                audit_id=audit_id,
                 agec_id=agec_id,
                 event_type=event_type,
                 message=message,
@@ -75,6 +79,7 @@ class AuditLog:
                 timestamp=datetime.now(timezone.utc).isoformat(),
             )
         )
+        return audit_id
 
     def to_list(self) -> list[dict[str, Any]]:
         """Return all events as a list of plain dicts."""
@@ -110,5 +115,7 @@ class AuditLog:
                 if not line:
                     continue
                 data = json.loads(line)
+                if "audit_id" not in data:
+                    data["audit_id"] = f"audit_{uuid.uuid4().hex[:12]}"
                 log.events.append(AuditEvent(**data))
         return log
