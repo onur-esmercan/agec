@@ -178,8 +178,6 @@ If AGEC returns anything other than `allow`, the adapter raises
 - `examples/03_openai_tool_guard.py`
 - `examples/04_langgraph_node_guard.py`
 - `examples/05_audit_log.py`
-- `examples/crm_email_agent.py`
-- `examples/coding_agent.py`
 
 Run demos locally:
 
