@@ -128,6 +128,48 @@ result = guarded_tool()
 
 The callable runs only when the decision status is `allow`.
 
+## OpenAI and LangGraph Adapters
+
+AGEC also ships named adapter helpers. They do not own API keys or create agent
+framework clients; they guard the callable you are about to execute.
+
+```python
+from agec import wrap_openai_tool
+
+guarded_send = wrap_openai_tool(
+    send_email_campaign,
+    intent=intent,
+    context=context,
+    execution_path=execution_path,
+)
+
+result = guarded_send()
+```
+
+For LangGraph-style nodes, static model objects or state-aware factories can be
+used:
+
+```python
+from agec import Context, ExecutionPath, Intent, wrap_langgraph_node
+
+guarded_node = wrap_langgraph_node(
+    node,
+    intent=lambda state: Intent(
+        type=state["intent_type"],
+        source="agent_plan",
+        confidence=state["confidence"],
+    ),
+    context=lambda state: Context(facts=state["facts"]),
+    execution_path=lambda state: ExecutionPath(
+        steps=state["steps"],
+        approved_path_id=state["approved_path_id"],
+    ),
+)
+```
+
+If AGEC returns anything other than `allow`, the adapter raises
+`AGECExecutionBlocked` and the wrapped call is not executed.
+
 ## Examples
 
 - `examples/crm_email_agent.py`
@@ -138,6 +180,7 @@ The callable runs only when the decision status is `allow`.
 - [x] Python SDK
 - [x] Audit log
 - [x] Simple LangGraph/OpenAI Agents-compatible callable wrapper
+- [x] Named OpenAI/LangGraph adapter helpers
 - [ ] MCP server
 
 ## License

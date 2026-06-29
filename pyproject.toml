@@ -22,6 +22,8 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
+openai = ["openai>=1.0"]
+langgraph = ["langgraph>=0.2"]
 dev = ["pytest>=8.0", "pytest-cov"]
 
 [project.urls]

@@ -1,12 +1,12 @@
-from agec import AGEC, Context, ExecutionPath, Intent
+from agec import Context, ExecutionPath, Intent, wrap_langgraph_node
 
 
-def run_tests() -> str:
-    return "tests passed"
+def run_tests(state: dict[str, str] | None = None) -> dict[str, str]:
+    state = state or {}
+    return {**state, "result": "tests passed"}
 
 
-agec = AGEC()
-guarded_run_tests = agec.wrap_callable(
+guarded_run_tests = wrap_langgraph_node(
     run_tests,
     intent=Intent(type="modify_code", source="agent_plan", confidence=0.87),
     context=Context(facts={"repo_status": "clean", "risk": "low"}),
@@ -16,4 +16,4 @@ guarded_run_tests = agec.wrap_callable(
     ),
 )
 
-print(guarded_run_tests())
+print(guarded_run_tests({"repo": "agec"}))
