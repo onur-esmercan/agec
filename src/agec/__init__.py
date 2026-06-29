@@ -5,6 +5,7 @@ AGEC is a pre-execution governance layer for AI agents. It validates
 """
 
 from .audit import AuditEvent, AuditLog
+from .adapters import AGECExecutionBlocked, wrap_langgraph_node, wrap_openai_call, wrap_openai_tool
 from .client import AGEC
 from .decisions import GovernanceDecision
 from .models import Context, ExecutionPath, Intent
@@ -14,6 +15,7 @@ __version__ = "0.1.0"
 
 __all__ = [
     "AGEC",
+    "AGECExecutionBlocked",
     "AGECValidator",
     "AuditEvent",
     "AuditLog",
@@ -22,4 +24,7 @@ __all__ = [
     "GovernanceDecision",
     "Intent",
     "validate",
+    "wrap_langgraph_node",
+    "wrap_openai_call",
+    "wrap_openai_tool",
 ]
